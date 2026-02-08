@@ -106,8 +106,8 @@ def beam_function(xi, n, bc_type, deriv=0):
         elif deriv == 4:
             return beta**4 * np.sin(beta * xi)
 
-    elif bc in ['CF', 'FC']:
-        # Clamped-Free (cantilever)
+    elif bc == 'CF':
+        # Clamped-Free (cantilever): Clamped at 0, Free at 1
         sigma = (np.sinh(beta) - np.sin(beta)) / (np.cosh(beta) + np.cos(beta))
 
         ch = np.cosh(beta * xi)
@@ -126,8 +126,35 @@ def beam_function(xi, n, bc_type, deriv=0):
         elif deriv == 4:
             return beta**4 * (ch - co - sigma * (sh - si))
 
-    elif bc in ['CS', 'SC']:
-        # Clamped-Simply supported
+    elif bc == 'FC':
+        # Free-Clamped: Free at 0, Clamped at 1
+        # Use reflected coordinate: phi_FC(xi) = phi_CF(1-xi)
+        # Derivatives pick up sign from chain rule: d/dxi = -d/d(1-xi)
+        xi_ref = 1 - xi
+        sigma = (np.sinh(beta) - np.sin(beta)) / (np.cosh(beta) + np.cos(beta))
+
+        ch = np.cosh(beta * xi_ref)
+        sh = np.sinh(beta * xi_ref)
+        co = np.cos(beta * xi_ref)
+        si = np.sin(beta * xi_ref)
+
+        if deriv == 0:
+            return ch - co - sigma * (sh - si)
+        elif deriv == 1:
+            # d/dxi(f(1-xi)) = -f'(1-xi)
+            return -beta * (sh + si - sigma * (ch - co))
+        elif deriv == 2:
+            # d^2/dxi^2(f(1-xi)) = f''(1-xi)
+            return beta**2 * (ch + co - sigma * (sh + si))
+        elif deriv == 3:
+            # d^3/dxi^3(f(1-xi)) = -f'''(1-xi)
+            return -beta**3 * (sh - si - sigma * (ch - co))
+        elif deriv == 4:
+            # d^4/dxi^4(f(1-xi)) = f''''(1-xi)
+            return beta**4 * (ch - co - sigma * (sh - si))
+
+    elif bc == 'CS':
+        # Clamped-Simply supported: Clamped at 0, Simply supported at 1
         sigma = (np.sinh(beta) - np.sin(beta)) / (np.cosh(beta) - np.cos(beta))
 
         ch = np.cosh(beta * xi)
@@ -146,8 +173,30 @@ def beam_function(xi, n, bc_type, deriv=0):
         elif deriv == 4:
             return beta**4 * (sh - si - sigma * (ch - co))
 
-    elif bc in ['SF', 'FS']:
-        # Simply supported-Free
+    elif bc == 'SC':
+        # Simply supported-Clamped: Simply supported at 0, Clamped at 1
+        # Use reflected coordinate: phi_SC(xi) = phi_CS(1-xi)
+        xi_ref = 1 - xi
+        sigma = (np.sinh(beta) - np.sin(beta)) / (np.cosh(beta) - np.cos(beta))
+
+        ch = np.cosh(beta * xi_ref)
+        sh = np.sinh(beta * xi_ref)
+        co = np.cos(beta * xi_ref)
+        si = np.sin(beta * xi_ref)
+
+        if deriv == 0:
+            return sh - si - sigma * (ch - co)
+        elif deriv == 1:
+            return -beta * (ch - co - sigma * (sh + si))
+        elif deriv == 2:
+            return beta**2 * (sh + si - sigma * (ch + co))
+        elif deriv == 3:
+            return -beta**3 * (ch + co - sigma * (sh - si))
+        elif deriv == 4:
+            return beta**4 * (sh - si - sigma * (ch - co))
+
+    elif bc == 'SF':
+        # Simply supported-Free: Simply supported at 0, Free at 1
         # Use quarter-wave sine functions as trial functions for Ritz method.
         # These satisfy w(0)=0 and allow free deflection at xi=1.
         # beta_eff = (2n-1)*pi/2 gives sin values of +/-1 at xi=1.
@@ -163,6 +212,24 @@ def beam_function(xi, n, bc_type, deriv=0):
             return -beta_eff**3 * np.cos(beta_eff * xi)
         elif deriv == 4:
             return beta_eff**4 * np.sin(beta_eff * xi)
+
+    elif bc == 'FS':
+        # Free-Simply supported: Free at 0, Simply supported at 1
+        # Use reflected quarter-wave sines: w(1)=0, free at 0
+        # phi(xi) = sin(beta_eff * (1-xi)) = sin(beta_eff - beta_eff*xi)
+        beta_eff = (2*n - 1) * np.pi / 2
+        xi_ref = 1 - xi
+
+        if deriv == 0:
+            return np.sin(beta_eff * xi_ref)
+        elif deriv == 1:
+            return -beta_eff * np.cos(beta_eff * xi_ref)
+        elif deriv == 2:
+            return -beta_eff**2 * np.sin(beta_eff * xi_ref)
+        elif deriv == 3:
+            return beta_eff**3 * np.cos(beta_eff * xi_ref)
+        elif deriv == 4:
+            return beta_eff**4 * np.sin(beta_eff * xi_ref)
 
     elif bc == 'CC':
         # Clamped-Clamped
