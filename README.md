@@ -7,11 +7,11 @@
 [![NumPy](https://img.shields.io/badge/NumPy-1.20+-orange.svg)](https://numpy.org/)
 [![SciPy](https://img.shields.io/badge/SciPy-1.7+-blueviolet.svg)](https://scipy.org/)
 
-**A Python-based tool for analyzing rectangular plate bending with various boundary conditions and load types.**
+**A Python tool for analyzing rectangular plate bending with various boundary conditions and load types.**
 
-*Features three solution methods (Levy, FIT, Ritz) with a graphical user interface for interactive analysis.*
+*Three solution methods (Levy, FIT, Ritz), PDF report generation, and a graphical user interface.*
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Methods](#method-comparison) • [References](#references)
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Report Generator](#-report-generator) • [Methods](#method-comparison) • [References](#references)
 
 </div>
 
@@ -27,18 +27,18 @@
 | Method | Description |
 |--------|-------------|
 | **Levy** | Analytical series solution, highest accuracy |
-| **FIT** | Finite Integral Transform, extended for Levy-type plates |
-| **Ritz** | Rayleigh-Ritz with beam eigenfunctions, flexible |
+| **FIT** | Finite Integral Transform, equivalent to Levy |
+| **Ritz** | Rayleigh-Ritz with beam eigenfunctions, handles all BCs |
 
 </td>
 <td width="50%">
 
 ### 📊 Output Results
-- **Deflection** (W)
+- **Deflection** (W) with contour plots
 - **Bending moments** (Mx, My)
-- **Von Mises stress**
-- **3D surface visualization**
-- **Cross-method comparison**
+- **Bending stresses** (σx, σy)
+- **PDF reports** with step-by-step calculations
+- **Publication-quality figures**
 
 </td>
 </tr>
@@ -46,20 +46,28 @@
 
 ### 🔧 Boundary Conditions
 
-| Code | Description |
-|------|-------------|
-| `SSSS` | Simply supported on all edges |
-| `SCSC` | Simply supported on x-edges, clamped on y-edges |
-| `SCSS` | Simply supported x-edges, clamped at y=0, simply supported at y=b |
-| `SCSF` | Simply supported x-edges, clamped at y=0, free at y=b |
-| `SSSF` | Simply supported x-edges and y=0, free at y=b |
-| `SFSF` | Simply supported x-edges, free on y-edges |
+| Code | Edges (x=0, y=0, x=a, y=b) | Solver Support |
+|------|----------------------------|----------------|
+| `SSSS` | All simply supported | Levy, FIT, Ritz |
+| `SCSC` | SS x-edges, clamped y-edges | Levy, FIT, Ritz |
+| `SCSS` | SS x-edges, C at y=0, S at y=b | Levy, FIT, Ritz |
+| `SCSF` | SS x-edges, C at y=0, F at y=b | Levy, FIT, Ritz |
+| `SSSF` | SS x-edges, S at y=0, F at y=b | Levy, FIT, Ritz |
+| `SFSF` | SS x-edges, F on y-edges | Levy, FIT, Ritz |
+| `CCCC` | All clamped | Ritz |
+| `FCFC` | Free x-edges, clamped y-edges | Ritz |
+| `CCCF` | C on 3 edges, F at y=b | Ritz |
+| `FCCC` | F at x=0, C on 3 edges | Ritz |
+
+**S** = Simply Supported, **C** = Clamped, **F** = Free
+
+> **Note:** Levy and FIT require simply supported x-edges (S_S_ pattern). For non-Levy BCs, the Ritz solver is used automatically.
 
 ### 📦 Load Types
-- ⬛ **Uniform** distributed load
-- 🟧 **Rectangular** patch load  
+- ⬛ **Uniform** distributed pressure
+- 🟧 **Rectangular** patch load
 - 🔵 **Circular** patch load
-- 📍 **Point** load
+- 📍 **Point** (concentrated) load
 
 ---
 
@@ -68,21 +76,20 @@
 ### Requirements
 - Python 3.10+
 - NumPy, SciPy, Matplotlib
-- Tkinter (usually included with Python)
+- [tectonic](https://tectonic-typesetting.github.io/) (optional, for PDF compilation)
 
 ### Quick Start
 ```bash
-# Clone the repository
 git clone https://github.com/incommodious/plate-bending-solver.git
 cd plate-bending-solver
 
-# Create virtual environment (recommended)
+# Create virtual environment
 python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
 
 # Install dependencies
-pip install numpy scipy matplotlib
+pip install -r requirements.txt
 ```
 
 ---
@@ -94,44 +101,69 @@ pip install numpy scipy matplotlib
 python plate-bending-gui.py
 ```
 
-The GUI allows you to:
-1. 🎯 Select boundary condition preset (SSSS, SCSC, etc.)
-2. 📐 Enter plate properties (dimensions, thickness, material)
-3. ⚖️ Choose load type and parameters
-4. ▶️ Run analysis and view results
-5. 🔄 Compare Levy, FIT, and Ritz methods
-
 ### Programmatic Usage
-<details>
-<summary>Click to expand code example</summary>
 
 ```python
 from plate_bending.solvers.levy_solver import StableLevySolver
-from plate_bending.solvers.fit_solver import FITSolver
 from plate_bending.solvers.ritz_solver import RitzSolver
 
 # Plate parameters
-a, b, h = 1.0, 1.0, 0.01  # dimensions and thickness (m)
-E, nu = 2.1e11, 0.3       # Young's modulus (Pa), Poisson's ratio
-q0 = 10000                 # load intensity (Pa)
+a, b, h = 1.0, 1.0, 0.01  # m
+E, nu = 2.1e11, 0.3
+q0 = 10000  # Pa
 
-# Levy solver for SCSF plate
+# Levy solver (Levy-type BCs only)
 levy = StableLevySolver(a, b, h, E, nu, bc_y0='C', bc_yb='F', n_terms=50)
 result = levy.solve('uniform', q0)
-print(f"Levy - Max deflection: {result['W_max']*1000:.4f} mm")
+print(f"Max deflection: {result['W_max']*1000:.4f} mm")
 
-# FIT solver (uses navier for SSSS, levy_ode for other Levy-type BCs)
-fit = FITSolver(a, b, h, E, nu, bc='SCSF', n_terms=50)
-result = fit.solve('uniform', q0, auto_converge=True)
-print(f"FIT - Max deflection: {result['W_max']*1000:.4f} mm (method: {fit.method})")
-
-# Ritz solver
-ritz = RitzSolver(a, b, h, E, nu, bc='SCSF', M=15, N=15)
-result = ritz.solve('rect_patch', q0, x1=0.3, y1=0.3, x2=0.7, y2=0.7)
-print(f"Ritz - Max deflection: {result['W_max']*1000:.4f} mm")
+# Ritz solver (any BC)
+ritz = RitzSolver(a, b, h, E, nu, bc='FCFC', M=15, N=15)
+result = ritz.solve('circular', q0, x0=0.5, y0=0.5, R=0.1)
+print(f"Max deflection: {result['W_max']*1000:.4f} mm")
 ```
 
-</details>
+---
+
+## 📄 Report Generator
+
+Generate publication-quality PDF reports with contour plots and step-by-step calculations.
+
+### CLI Usage
+```bash
+# Basic report (metric)
+python -m plate_bending.report \
+  --bc SSSS --load uniform --q 1000 \
+  --a 1.0 --b 1.0 --h 0.01 --E 200e9 --nu 0.3 \
+  --method levy --output report.tex --compile
+
+# Imperial units with circular load
+python -m plate_bending.report \
+  --bc FCFC --load circular --q 176.7 \
+  --a 6.0 --b 1.5 --h 0.07 --E 29e6 --nu 0.3 \
+  --x0 0.75 --y0 0.75 --R 0.35 \
+  --method ritz --units imperial --output report.tex --compile
+```
+
+### Report Contents
+- Input parameters with unit conversions
+- Flexural rigidity calculation (step-by-step)
+- Governing equation and solution method description
+- Convergence study with narrative
+- Deflection & stress results at analysis point
+- Non-dimensional coefficients for benchmark comparison
+- **Contour plots**: deflection field, σx and σy stress fields
+- **Geometry diagram**: auto-generated with BC symbols
+- **Appendix**: worked step-by-step Ritz/Levy calculation with actual numbers
+
+### Report Modules
+
+| Module | Purpose |
+|--------|---------|
+| `plate_bending/report.py` | LaTeX report generation, CLI entry point |
+| `plate_bending/figures.py` | Matplotlib contour & profile plots |
+| `plate_bending/geometry_diagram.py` | Auto BC symbol geometry diagrams |
+| `plate_bending/appendix.py` | Step-by-step calculation appendix |
 
 ---
 
@@ -139,80 +171,83 @@ print(f"Ritz - Max deflection: {result['W_max']*1000:.4f} mm")
 
 ```
 plate-bending-solver/
-├── 📄 plate-bending-gui.py      # Main GUI application
-├── 📄 README.md                 # This file
-├── 📄 PROGRESS.md               # Development history
-├── 📦 plate_bending/            # Core package
-│   ├── solvers/                 # Solution methods
-│   │   ├── levy_solver.py       # Levy series solution
-│   │   ├── fit_solver.py        # Finite Integral Transform
-│   │   ├── ritz_solver.py       # Rayleigh-Ritz method
-│   │   └── beam_functions.py    # Beam eigenfunction library
-│   └── validation/              # Benchmarks and tests
-├── 🧪 tests/                    # Test scripts
-└── 📚 docs/                     # Documentation and references
+├── plate-bending-gui.py          # GUI application
+├── README.md
+├── AUDIT_REPORT.md               # Physics/math audit results
+├── requirements.txt
+├── plate_bending/                # Core package
+│   ├── solvers/
+│   │   ├── levy_solver.py        # Levy series solution
+│   │   ├── fit_solver.py         # Finite Integral Transform
+│   │   ├── ritz_solver.py        # Rayleigh-Ritz method
+│   │   └── beam_functions.py     # Beam eigenfunctions (SS, CC, CF, FC, CS, SC, FF)
+│   ├── validation/
+│   │   └── benchmarks.py         # Timoshenko/Szilard reference values
+│   ├── report.py                 # LaTeX report generator
+│   ├── figures.py                # Plot generation
+│   ├── geometry_diagram.py       # Plate diagram generator
+│   └── appendix.py               # Calculation appendix engine
+├── tests/
+│   ├── test_comprehensive_validation.py  # 5 core validation tests
+│   ├── test_fcfc_cccf.py                 # 7 non-Levy BC tests
+│   ├── test_report.py                    # 4 report module tests
+│   └── deep_audit.py                     # Extended physics audit
+├── report_output/                # Generated reports & figures
+└── docs/                        # Reference papers
 ```
 
 ---
 
 ## 📊 Method Comparison
 
-| Method | Best For | Accuracy | Speed |
-|:------:|:---------|:--------:|:-----:|
-| **Levy** | All Levy-type BCs | ⭐⭐⭐ Highest | 🚀 Fast |
-| **FIT** | All Levy-type BCs | ⭐⭐⭐ Matches Levy | 🚀 Fast |
-| **Ritz** | All BCs, flexible | ⭐⭐ Good (~1-5%) | 🏃 Medium |
+| Feature | Levy | FIT | Ritz |
+|:--------|:----:|:---:|:----:|
+| Accuracy | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ (~1-5%) |
+| Speed | 🚀 Fast | 🚀 Fast | 🏃 Medium |
+| Levy-type BCs | ✅ | ✅ | ✅ |
+| Non-Levy BCs (CCCC, FCFC, etc.) | ❌ | ❌ | ✅ |
+| Patch/Circular loads | ✅ | ✅ | ✅ |
+| Point loads | ✅ | ✅ | ✅ |
 
-<details>
-<summary><b>FIT Method Details</b></summary>
-
-- **SSSS plates** (`navier` method): Uses true Navier double sine series (bidirectional FIT)
-- **Other Levy-type plates** (`levy_ode` method): Uses sine series in x and solves ODE in y
-
-For non-SSSS Levy-type plates (SCSC, SCSS, SCSF, SSSF, SFSF), FIT uses the `levy_ode` method which is mathematically equivalent to the Levy solver:
-- Fourier sine series in x-direction
-- 4th-order ODE solution in y-direction with stable exponential basis
-- Same boundary condition handling (clamped, simply supported, free)
-
-</details>
-
-<details>
-<summary><b>Accuracy Notes</b></summary>
-
-- **Uniform loads**: Levy and FIT match exactly (same closed-form solution)
-- **Patch/Circular loads**: FIT matches Levy within ~0.5%
-- **Levy vs Ritz**: typically agree within 1-5%
-- For SSSF/SFSF plates, Levy and FIT are more accurate than Ritz
-
-</details>
+> **Levy-type BCs** require simply supported x-edges (S at x=0 and x=a). All other configurations need the Ritz solver.
 
 ---
 
 ## ✅ Validation
 
-The solvers are validated against:
-- 📖 Timoshenko & Woinowsky-Krieger analytical solutions
-- 🔄 Cross-method verification (Levy vs Ritz)
-- 🔬 Physical behavior checks (load ordering, edge effects)
+Validated against classical references and cross-method checks:
+
+| BC | Reference | Error |
+|----|-----------|-------|
+| SSSS | Timoshenko Table 8 | 0.06% |
+| SSSF | Timoshenko Table 48 | 0.06% |
+| CCCC | Timoshenko Table 35 | 0.66% |
+| SCSC | Timoshenko Table 36 | ~0.1% |
+| FCFC | Ritz convergence study | Converged (0.47%) |
+| CCCF | Ritz convergence study | Converged (0.13%) |
 
 ```bash
-# Run validation tests
-python tests/test_comprehensive_validation.py
+# Run all tests
+python tests/test_comprehensive_validation.py   # 5/5 pass
+python tests/test_fcfc_cccf.py                   # 7/7 pass
+python -c "from tests.test_report import *; test_report_latex_and_values_ssss_uniform_center(); test_imperial_units_match_metric(); test_fmt_significant_figures(); test_circular_load_report(); print('4/4 report tests pass')"
 ```
 
 ---
 
 ## 📚 References
 
-1. Timoshenko, S. & Woinowsky-Krieger, S. (1959). *Theory of Plates and Shells*. McGraw-Hill.
-2. Blevins, R. D. (1979). *Formulas for Natural Frequency and Mode Shape*. Van Nostrand Reinhold.
-3. Xu, Q., et al. (2020). "[Analytical Bending Solutions of Orthotropic Rectangular Thin Plates...](https://doi.org/10.1155/2020/8848879)" *Advances in Civil Engineering*.
+1. Timoshenko, S. & Woinowsky-Krieger, S. (1959). *Theory of Plates and Shells*, 2nd ed. McGraw-Hill.
+2. Szilard, R. (2004). *Theories and Applications of Plate Analysis*. John Wiley & Sons.
+3. Ventsel, E. & Krauthammer, T. (2001). *Thin Plates and Shells*. Marcel Dekker.
+4. Blevins, R. D. (1979). *Formulas for Natural Frequency and Mode Shape*. Van Nostrand Reinhold.
+5. Xu, Q., et al. (2020). "[Analytical Bending Solutions of Orthotropic Rectangular Thin Plates...](https://doi.org/10.1155/2020/8848879)" *Advances in Civil Engineering*.
 
 ---
 
 ## 📄 License
 
-MIT License - Free for academic and commercial use.
+MIT License — free for academic and commercial use.
 
 ---
 
