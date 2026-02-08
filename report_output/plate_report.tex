@@ -1,0 +1,218 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{siunitx}
+\usepackage{float}
+\geometry{margin=1in}
+\title{Rectangular Plate Bending Analysis\\[0.5em]\large 6'' $\times$ 1.5'' FCFC Steel Plate --- Circular Patch Load}
+\author{Plate Bending Solver (Rayleigh--Ritz Method)}
+\date{February 8, 2026}
+\begin{document}
+\maketitle
+
+\section{Plate Geometry \& Setup}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig_geometry.png}
+\caption{Plate geometry, boundary conditions, and applied load.}
+\end{figure}
+
+\subsection{Geometry \& Material}
+\begin{tabular}{lll}
+\toprule
+Parameter & Symbol & Value \\
+\midrule
+Plate length (x-direction) & $a$ & 6.000 in \\
+Plate width (y-direction) & $b$ & 1.500 in \\
+Thickness & $h$ & 0.070 in \\
+Young's modulus & $E$ & $29 \times 10^{6}$ psi \\
+Poisson's ratio & $\nu$ & 0.3 \\
+\bottomrule
+\end{tabular}
+
+\subsection{Flexural Rigidity}
+\begin{equation}
+D = \frac{Eh^3}{12(1-\nu^2)} = \frac{29 \times 10^{6} \times 0.070^3}{12(1-0.3^2)} = 910.9 \ \text{lbf\,\textperiodcentered\,in}
+\end{equation}
+
+\subsection{Boundary Conditions}
+Configuration: \textbf{FCFC}
+\begin{itemize}
+\item $x = 0$ (short edge): \textbf{Free}
+\item $y = 0$ (long edge): \textbf{Clamped}
+\item $x = a$ (short edge): \textbf{Free}
+\item $y = b$ (long edge): \textbf{Clamped}
+\end{itemize}
+
+\subsection{Loading}
+Concentrated force $P = 68$ lbf distributed over a $\varnothing 0.7''$ circular area ($R = 0.35''$), centered at $(x_0, y_0) = (0.75,\, 0.75)$ in.
+
+\begin{equation}
+q_0 = \frac{P}{\pi R^2} = \frac{68}{\pi \times 0.35^2} = 176.7 \ \text{psi}
+\end{equation}
+
+\section{Governing Equation}
+\begin{equation}
+D\nabla^4 w = D\!\left(\frac{\partial^4 w}{\partial x^4} + 2\frac{\partial^4 w}{\partial x^2 \partial y^2} + \frac{\partial^4 w}{\partial y^4}\right) = q(x,y)
+\end{equation}
+
+\section{Solution Method --- Rayleigh--Ritz}
+FCFC is non-Levy (x-edges are free, not simply supported), so the Rayleigh--Ritz method is used:
+\begin{equation}
+w(x,y) = \sum_{m=1}^{M}\sum_{n=1}^{N} A_{mn}\,\phi_m\!\left(\frac{x}{a}\right)\,\psi_n\!\left(\frac{y}{b}\right)
+\end{equation}
+with Free--Free eigenfunctions $\phi_m$ in $x$ and Clamped--Clamped eigenfunctions $\psi_n$ in $y$.
+Final solution uses $M = N = 15$ (225 DOFs).
+
+\section{Results at Load Center}
+
+$(x, y) = (0.75,\, 0.75)$ in:
+
+\subsection{Deflection \& Internal Moments}
+\begin{tabular}{llrl}
+\toprule
+Quantity & Symbol & Value & Units \\
+\midrule
+Deflection & $w$ & 0.000962 & in (0.96 mil) \\
+Bending moment (x) & $M_x$ & 218.6 & lbf\,\textperiodcentered\,in/in \\
+Bending moment (y) & $M_y$ & 308.9 & lbf\,\textperiodcentered\,in/in \\
+\bottomrule
+\end{tabular}
+
+\subsection{Bending Stresses}
+\begin{align}
+\sigma_x &= \frac{6 M_x}{h^2} = \frac{6 \times 218.6}{0.070^2} = 6800 \ \text{psi} \ (6.80 \ \text{ksi}) \\
+\sigma_y &= \frac{6 M_y}{h^2} = \frac{6 \times 308.9}{0.070^2} = 9607 \ \text{psi} \ (9.61 \ \text{ksi})
+\end{align}
+
+\subsection{Global Maxima}
+\begin{tabular}{llrl}
+\toprule
+Quantity & & Value & Units \\
+\midrule
+Max deflection & $|w|_{\max}$ & 0.000964 & in \\
+Max $|\sigma_x|$ & & 6877 & psi (6.88 ksi) \\
+Max $|\sigma_y|$ & & 11303 & psi (11.30 ksi) \\
+\bottomrule
+\end{tabular}
+
+\section{Deflection Contour}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{fig_deflection.png}
+\caption{Deflection field (in mils). Dashed circle marks the loaded area.}
+\end{figure}
+
+\section{Stress Contours}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{fig_stress.png}
+\caption{Bending stress fields $\sigma_x$ and $\sigma_y$ (ksi).}
+\end{figure}
+
+\section{Deflection Profile}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig_profile.png}
+\caption{Deflection along the plate centerline ($y = 0.75''$).}
+\end{figure}
+
+\section*{Notes}
+\begin{itemize}
+\item Material: structural steel ($E = 29$ Msi, $\nu = 0.3$).
+\item Kirchhoff thin plate theory ($h/b = 0.047 \ll 1$).
+\item Stresses are max surface values at $z = \pm h/2$.
+\end{itemize}
+
+\appendix
+\section{Step-by-Step Ritz Calculation}
+\label{app:worked}
+
+This appendix walks through the Ritz solution in detail, showing every number so the calculation can be followed or reproduced.
+
+\subsection{Setup}
+
+\begin{tabular}{lrl}
+\toprule
+Quantity & Value & \\
+\midrule
+$a$ (plate length) & $6$ & in \\
+$b$ (plate width) & $1.5$ & in \\
+$h$ (thickness) & $0.07$ & in \\
+$E$ (Young's modulus) & $29 \times 10^{6}$ & psi \\
+$\nu$ (Poisson's ratio) & $0.3$ & \\
+$q_0$ (pressure) & $176.7$ & psi \\
+\bottomrule
+\end{tabular}
+
+\medskip\noindent\textbf{Flexural rigidity:}
+\begin{align}
+D &= \frac{Eh^3}{12(1-\nu^2)} \notag \\
+  &= \frac{29 \times 10^{6} \times (0.07)^3}{12(1-0.3^2)} \notag \\
+  &= \frac{29 \times 10^{6} \times 343 \times 10^{-6}}{10.92} \notag \\
+  &= 910.9 \ \text{lbf\,\textperiodcentered\,in}
+\end{align}
+
+\subsection{Trial Function}
+
+The deflection is approximated as a double sum of beam eigenfunctions:
+\begin{equation}
+w(x,y) = \sum_{m=1}^{M}\sum_{n=1}^{N} A_{mn}\,\phi_m\!\left(\frac{x}{a}\right)\,\psi_n\!\left(\frac{y}{b}\right)
+\end{equation}
+
+\begin{itemize}
+\item $\phi_m(\xi)$: \textbf{FF} (Free--Free) beam eigenfunctions in $x$
+\item $\psi_n(\eta)$: \textbf{CC} (Clamped--Clamped) beam eigenfunctions in $y$
+\end{itemize}
+
+Minimizing the total potential energy $\Pi = U - W_{\text{ext}}$ gives:
+\begin{equation}
+\mathbf{K}\,\mathbf{A} = \mathbf{F}
+\end{equation}
+where $\mathbf{K}$ is the stiffness matrix (from plate strain energy) and $\mathbf{F}$ is the load vector.
+
+\subsection{Convergence Study}
+
+\noindent The series is evaluated at increasing truncation levels. At each level, the deflection at the analysis point $(0.75,\,0.75)$ in is recorded.
+
+\noindent $M = N = 2$: solve $\rightarrow$ $w = 0.4987$ mil (first evaluation).
+
+\noindent $M = N = 6$: $w = 0.744$ mil. $|\Delta w| = 0.245$ mil.
+
+\noindent Continuing to $M = N = 15$: $w = 0.9618$ mil, $|\Delta w| = 0.0153$ mil (1.6\%) --- converged.
+
+\begin{tabular}{rrrr}
+\toprule
+$M = N$ & DOFs & $w$ (mil) & $|\Delta w|$ (mil) \\
+\midrule
+2 & 4 & $0.4987$ & --- \\
+6 & 36 & $0.744$ & $0.245$ (33\%) \\
+8 & 64 & $0.9029$ & $0.159$ (18\%) \\
+10 & 100 & $0.9431$ & $0.0403$ (4\%) \\
+12 & 144 & $0.9464$ & $3.27 \times 10^{-3}$ (0.3\%) \\
+\textbf{15} & \textbf{225} & $\mathbf{0.9618}$ & $0.0153$ (2\%) \\
+\bottomrule
+\end{tabular}
+
+\subsection{Physical Intuition}
+
+\textit{This plate has 2 clamped edges and 2 free edges. 
+The clamped edges provide strong rotational restraint, limiting deflection but 
+concentrating bending moments near the supports. 
+The free edge(s) allow the plate to deflect without constraint, so maximum 
+deflection typically occurs near or at the free edges. 
+The high aspect ratio (4:1) means the plate behaves 
+somewhat like a wide beam in the short direction. 
+}
+
+
+\section*{References}
+\begin{enumerate}
+\item Timoshenko, S. and Woinowsky-Krieger, S., \emph{Theory of Plates and Shells}, 2nd ed., 1959.
+\item Ventsel, E. and Krauthammer, T., \emph{Thin Plates and Shells}, Marcel Dekker, 2001.
+\end{enumerate}
+
+\end{document}

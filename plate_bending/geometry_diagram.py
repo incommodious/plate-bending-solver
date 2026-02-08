@@ -100,6 +100,7 @@ def generate_geometry_diagram(
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
+    return output_path
 
 
 def _edge_name(code: str) -> str:

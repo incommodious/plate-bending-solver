@@ -46,7 +46,7 @@ UNIT_CONVERSIONS = {
         'metric': 1000.0      # m to mm
     },
     'stress': {
-        'imperial': 0.000145037738,  # Pa to ksi
+        'imperial': 0.000000145037738,  # Pa to ksi (1 ksi = 6,894,760 Pa)
         'metric': 1e-6               # Pa to MPa
     }
 }
