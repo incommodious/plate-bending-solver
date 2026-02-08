@@ -89,3 +89,27 @@ def test_fmt_significant_figures():
     assert _fmt(47.87, 4) == "47.87"
     # Mantissa must be in [1, 1000) for engineering notation
     assert _fmt(1.041e-10, 4) == r"104.1 \times 10^{-12}"
+
+
+def test_circular_load_report():
+    """Circular patch load produces a valid report that compiles."""
+    inputs = ReportInputs(
+        a=1.0, b=1.0, h=0.01, E=200e9, nu=0.3,
+        bc="SSSS", load_type="circular", q0=1000.0,
+        x=0.5, y=0.5, method="levy",
+        x0=0.5, y0=0.5, R=0.1,
+    )
+    latex, data = generate_point_report(inputs, n_terms=20, include_convergence=True)
+
+    assert "circular area" in latex
+    assert "strip superposition" in latex
+    assert data["point"]["W"] > 0
+    # Circular load on center of SSSS plate should give less deflection than
+    # uniform (loaded area is πR²/a² ≈ 3.14% of plate)
+    uniform = ReportInputs(
+        a=1.0, b=1.0, h=0.01, E=200e9, nu=0.3,
+        bc="SSSS", load_type="uniform", q0=1000.0,
+        x=0.5, y=0.5, method="levy",
+    )
+    _, udata = generate_point_report(uniform, n_terms=20, include_convergence=False)
+    assert data["point"]["W"] < udata["point"]["W"]
