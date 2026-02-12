@@ -253,6 +253,304 @@ def _fmt_plain(value: float, sig: int = 4) -> str:
 # LaTeX sections
 # ---------------------------------------------------------------------------
 
+def _assumptions_section() -> List[str]:
+    """Return LaTeX lines for Assumptions & Limitations section."""
+    return [
+        r"\subsection{Assumptions \& Limitations}",
+        r"\begin{itemize}",
+        r"\item \textbf{Kirchhoff thin plate theory} --- plate thickness is small "
+        r"compared to in-plane dimensions ($h/a < 0.1$); transverse shear "
+        r"deformation is neglected.",
+        r"\item \textbf{Small deflections} --- maximum deflection is small "
+        r"compared to the plate thickness ($w \ll h$); geometric nonlinearity "
+        r"is neglected.",
+        r"\item \textbf{Linear elastic, isotropic, homogeneous material} --- "
+        r"the constitutive relation is $\sigma = E\varepsilon$ with constant $E$ "
+        r"and $\nu$ throughout.",
+        r"\item \textbf{No membrane forces} --- in-plane loads and mid-surface "
+        r"stretching are not considered.",
+        r"\item \textbf{No thermal effects} --- temperature is uniform and "
+        r"constant.",
+        r"\item \textbf{Sign convention:} Positive deflection $w$ is downward "
+        r"(in the direction of applied load). Positive bending moments $M_x$, "
+        r"$M_y$ produce tension on the \emph{bottom} face ($z = +h/2$).",
+        r"\end{itemize}",
+        "",
+    ]
+
+
+def _load_expansion_section(inputs: ReportInputs, q0_disp: float, press_unit: str,
+                            len_unit: str, units: str, n_terms: int) -> List[str]:
+    """Return LaTeX lines showing Fourier load expansion with numbers."""
+    lt = inputs.load_type.lower()
+    lines: List[str] = [
+        r"\section{Fourier Load Expansion}",
+        r"The load $q(x,y)$ is expanded in a Fourier sine series in $x$:",
+        r"\begin{equation}",
+        r"q(x,y) = \sum_{m=1}^{\infty} q_m(y)\,\sin\!\left(\frac{m\pi x}{a}\right)",
+        r"\end{equation}",
+        "",
+    ]
+
+    a = inputs.a
+    a_disp, _ = _convert_unit(a, "length", units)
+
+    if lt == "uniform":
+        lines += [
+            r"\noindent For uniform pressure $q_0$, the Fourier coefficients are:",
+            r"\begin{equation}",
+            r"q_m = \frac{2}{a}\int_0^a q_0 \sin\!\left(\frac{m\pi x}{a}\right)dx "
+            r"= \begin{cases} \dfrac{4q_0}{m\pi} & m\ \text{odd} \\[6pt] 0 & m\ \text{even} \end{cases}",
+            r"\end{equation}",
+            "",
+            r"\noindent Substituting $q_0 = " + _fmt(q0_disp, 4) + r"$ " + press_unit + ":",
+            "",
+        ]
+        for m in (1, 3, 5):
+            qm_si = 4.0 * inputs.q0 / (m * np.pi)
+            qm_disp, _ = _convert_unit(qm_si, "pressure", units)
+            lines.append(
+                rf"\noindent $q_{{{m}}} = \dfrac{{4 \times {_fmt(q0_disp, 4)}}}"
+                rf"{{{m}\pi}} = {_fmt(qm_disp, 4)}$ {press_unit}"
+            )
+            lines.append("")
+
+    elif lt == "rect_patch":
+        x1_d, _ = _convert_unit(inputs.x1, "length", units)
+        x2_d, _ = _convert_unit(inputs.x2, "length", units)
+        lines += [
+            r"\noindent For a rectangular patch load between $x_1$ and $x_2$:",
+            r"\begin{equation}",
+            r"q_m = \frac{2q_0}{m\pi}\left[\cos\frac{m\pi x_1}{a} - \cos\frac{m\pi x_2}{a}\right]",
+            r"\end{equation}",
+            "",
+            rf"\noindent With $q_0 = {_fmt(q0_disp, 4)}$ {press_unit}, "
+            rf"$x_1 = {_fmt(x1_d, 4)}$ {len_unit}, $x_2 = {_fmt(x2_d, 4)}$ {len_unit}:",
+            "",
+        ]
+        for m in (1, 3):
+            cos1 = np.cos(m * np.pi * inputs.x1 / a)
+            cos2 = np.cos(m * np.pi * inputs.x2 / a)
+            qm_si = 2.0 * inputs.q0 / (m * np.pi) * (cos1 - cos2)
+            qm_disp, _ = _convert_unit(qm_si, "pressure", units)
+            lines.append(
+                rf"\noindent $q_{{{m}}} = \dfrac{{2 \times {_fmt(q0_disp, 4)}}}"
+                rf"{{{m}\pi}}\left[\cos\dfrac{{{m}\pi \times {_fmt(x1_d, 4)}}}"
+                rf"{{{_fmt(a_disp, 4)}}} - \cos\dfrac{{{m}\pi \times {_fmt(x2_d, 4)}}}"
+                rf"{{{_fmt(a_disp, 4)}}}\right] = {_fmt(qm_disp, 4)}$ {press_unit}"
+            )
+            lines.append("")
+
+    elif lt == "circular":
+        lines += [
+            r"\noindent The circular patch is decomposed into thin rectangular strips "
+            r"parallel to the $x$-axis. For each strip $j$ of width $\Delta y_j$ "
+            r"at ordinate $y_j$, the chord half-width $\ell_j$ is determined from "
+            r"the circle geometry, and the corresponding Fourier coefficient is "
+            r"computed as for a rectangular patch of width $2\ell_j$.",
+            "",
+            r"\noindent The resulting strip contributions are superposed. "
+            r"Because strip widths vary with $y$, the coefficients $q_m(y)$ are "
+            r"computed numerically for each mode $m$.",
+            "",
+        ]
+
+    elif lt == "point":
+        x0_d, _ = _convert_unit(inputs.x0, "length", units)
+        force_d, force_unit = _convert_unit(inputs.q0, "force", units)
+        lines += [
+            r"\noindent For a concentrated force $P$ at $x = x_0$:",
+            r"\begin{equation}",
+            r"q_m = \frac{2P}{a}\sin\frac{m\pi x_0}{a}",
+            r"\end{equation}",
+            "",
+            rf"\noindent With $P = {_fmt(force_d, 4)}$ {force_unit}, "
+            rf"$x_0 = {_fmt(x0_d, 4)}$ {len_unit}:",
+            "",
+        ]
+        for m in (1, 3):
+            qm_si = 2.0 * inputs.q0 / a * np.sin(m * np.pi * inputs.x0 / a)
+            qm_disp, qm_unit = _convert_unit(qm_si, "force", units)
+            # qm has units of force/length
+            qm_per_len = qm_disp / (_convert_unit(a, "length", units)[0])
+            len_u = _convert_unit(1.0, "length", units)[1]
+            lines.append(
+                rf"\noindent $q_{{{m}}} = \dfrac{{2 \times {_fmt(force_d, 4)}}}"
+                rf"{{{_fmt(a_disp, 4)}}}\sin\dfrac{{{m}\pi \times {_fmt(x0_d, 4)}}}"
+                rf"{{{_fmt(a_disp, 4)}}} = {_fmt(qm_disp / a_disp, 4)}$ {force_unit}/{len_u}"
+            )
+            lines.append("")
+
+    return lines
+
+
+def _levy_worked_example(inputs: ReportInputs, D: float, q0_disp: float,
+                         D_disp: float, a_disp: float, b_disp: float,
+                         len_unit: str, press_unit: str, rig_unit: str,
+                         units: str, point: Dict[str, float],
+                         n_terms: int) -> List[str]:
+    """Return LaTeX lines showing the m=1 Levy term worked out."""
+    a = inputs.a
+    b = inputs.b
+    lt = inputs.load_type.lower()
+
+    alpha1 = np.pi / a
+    alpha1_disp = np.pi / a_disp  # 1/len_unit
+
+    # Compute q1
+    if lt == "uniform":
+        q1 = 4.0 * inputs.q0 / np.pi
+    elif lt == "point":
+        x0 = inputs.x0 if inputs.x0 is not None else a / 2.0
+        q1 = 2.0 * inputs.q0 / a * np.sin(np.pi * x0 / a)
+    elif lt == "rect_patch":
+        x1 = inputs.x1 if inputs.x1 is not None else 0.4 * a
+        x2 = inputs.x2 if inputs.x2 is not None else 0.6 * a
+        q1 = 2.0 * inputs.q0 / np.pi * (np.cos(np.pi * x1 / a) - np.cos(np.pi * x2 / a))
+    else:
+        # circular or other — skip worked example
+        return []
+
+    q1_disp, _ = _convert_unit(q1, "pressure", units)
+    Yp = q1 / (D * alpha1**4)
+    Yp_disp, _ = _convert_unit(Yp, "length", units)
+
+    # Get Y1(y) from the solver by running a 1-term solve
+    solver = StableLevySolver(a, b, inputs.h, inputs.E, inputs.nu,
+                              bc_y0=inputs.bc[1], bc_yb=inputs.bc[3], n_terms=1)
+    load_kw = dict(load_type=inputs.load_type, q0=inputs.q0,
+                   x0=inputs.x0, y0=inputs.y0, R=inputs.R,
+                   x1=inputs.x1, y1=inputs.y1, x2=inputs.x2, y2=inputs.y2)
+    res1 = solver.solve(**load_kw)
+    w1_at_point = _bilinear_sample(inputs.x, inputs.y, res1["X"], res1["Y"], res1["W"])
+    w1_disp, _ = _convert_unit(w1_at_point, "length", units)
+
+    # Y1 at analysis point: w1 = sin(π x/a) · Y1(y), so Y1 = w1/sin(πx/a)
+    sin_val = np.sin(np.pi * inputs.x / a)
+    if abs(sin_val) > 1e-12:
+        Y1_at_y = w1_at_point / sin_val
+    else:
+        Y1_at_y = 0.0
+    Y1_disp, _ = _convert_unit(Y1_at_y, "length", units)
+
+    x_disp, _ = _convert_unit(inputs.x, "length", units)
+    y_disp, _ = _convert_unit(inputs.y, "length", units)
+
+    lines = [
+        r"\subsection{Worked Example: $m = 1$ Term}",
+        "",
+        rf"\noindent Wave number: $\alpha_1 = \pi / a = \pi / {_fmt(a_disp, 4)} "
+        rf"= {_fmt(alpha1_disp, 4)}$ {len_unit}$^{{-1}}$",
+        "",
+        r"\noindent The ODE for $Y_1(y)$ becomes:",
+        r"\begin{equation}",
+        rf"D\!\left(Y_1'''' - 2\alpha_1^2 Y_1'' + \alpha_1^4 Y_1\right) = q_1, "
+        rf"\qquad D = {_fmt(D_disp, 4)}\ \text{{{rig_unit}}},\quad "
+        rf"q_1 = {_fmt(q1_disp, 4)}\ \text{{{press_unit}}}",
+        r"\end{equation}",
+        "",
+        r"\noindent \textbf{Particular solution} (constant load on RHS):",
+        r"\begin{equation}",
+        rf"Y_p = \frac{{q_1}}{{D\,\alpha_1^4}} = "
+        rf"\frac{{{_fmt(q1_disp, 4)}}}{{{_fmt(D_disp, 4)} \times {_fmt(alpha1_disp, 4)}^4}} "
+        rf"= {_fmt(Yp_disp, 4)}\ \text{{{len_unit}}}",
+        r"\end{equation}",
+        "",
+        r"\noindent \textbf{Homogeneous solution:}",
+        r"\begin{equation}",
+        r"Y_h = (C_1 + C_2\,\alpha_1 y)\cosh(\alpha_1 y) "
+        r"+ (C_3 + C_4\,\alpha_1 y)\sinh(\alpha_1 y)",
+        r"\end{equation}",
+        "",
+        rf"\noindent The constants $C_1$--$C_4$ are determined by the boundary "
+        rf"conditions at $y = 0$ ({inputs.bc[1]}) and $y = b$ ({inputs.bc[3]}).",
+        "",
+        rf"\noindent Evaluating at the analysis point "
+        rf"$(x, y) = ({_fmt(x_disp, 4)},\, {_fmt(y_disp, 4)})$ {len_unit}:",
+        r"\begin{align*}",
+        rf"Y_1({_fmt(y_disp, 4)}) &= {_fmt(Y1_disp, 4)}\ \text{{{len_unit}}} \\",
+        rf"w_1 &= \sin\!\left(\frac{{\pi \times {_fmt(x_disp, 4)}}}"
+        rf"{{{_fmt(a_disp, 4)}}}\right) \times {_fmt(Y1_disp, 4)} "
+        rf"= {_fmt(w1_disp, 6)}\ \text{{{len_unit}}}",
+        r"\end{align*}",
+        "",
+        rf"\noindent The full solution sums $N = {n_terms}$ such terms.",
+        "",
+    ]
+
+    return lines
+
+
+def _moment_derivation_section(inputs: ReportInputs, point: Dict[str, float],
+                               h_disp: float, len_unit: str, mom_unit: str,
+                               stress_unit: str, units: str) -> List[str]:
+    """Return LaTeX lines deriving moments and stresses with numbers."""
+    method = inputs.method.lower()
+
+    Mx_disp, _ = _convert_unit(point["Mx"], "moment", units)
+    My_disp, _ = _convert_unit(point["My"], "moment", units)
+    sigma_x_disp, _ = _convert_unit(point["sigma_x"], "stress", units)
+    sigma_y_disp, _ = _convert_unit(point["sigma_y"], "stress", units)
+
+    a_disp, _ = _convert_unit(inputs.a, "length", units)
+    x_disp, _ = _convert_unit(inputs.x, "length", units)
+    y_disp, _ = _convert_unit(inputs.y, "length", units)
+
+    lines = [
+        r"\subsection{Moment and Stress Derivation}",
+        r"\noindent Bending moments are obtained from the deflection surface:",
+        r"\begin{align}",
+        r"M_x &= -D\!\left(\frac{\partial^2 w}{\partial x^2} "
+        r"+ \nu\,\frac{\partial^2 w}{\partial y^2}\right) \\",
+        r"M_y &= -D\!\left(\frac{\partial^2 w}{\partial y^2} "
+        r"+ \nu\,\frac{\partial^2 w}{\partial x^2}\right)",
+        r"\end{align}",
+        "",
+    ]
+
+    if method == "levy":
+        lines += [
+            r"\noindent For the L\'evy solution $w = \sum \sin(m\pi x/a)\,Y_m(y)$, "
+            r"the second derivatives are:",
+            r"\begin{align*}",
+            r"\frac{\partial^2 w}{\partial x^2} &= "
+            r"-\sum_{m=1}^{N}\left(\frac{m\pi}{a}\right)^{\!2}"
+            r"\sin\!\left(\frac{m\pi x}{a}\right)Y_m(y) \\",
+            r"\frac{\partial^2 w}{\partial y^2} &= "
+            r"\sum_{m=1}^{N}\sin\!\left(\frac{m\pi x}{a}\right)Y_m''(y)",
+            r"\end{align*}",
+            "",
+        ]
+
+    lines += [
+        rf"\noindent Evaluating at $(x, y) = ({_fmt(x_disp, 4)},\, {_fmt(y_disp, 4)})$ "
+        rf"{len_unit}:",
+        "",
+        rf"\noindent $M_x = {_fmt(Mx_disp, 6)}$ {mom_unit}",
+        "",
+        rf"\noindent $M_y = {_fmt(My_disp, 6)}$ {mom_unit}",
+        "",
+        r"\bigskip",
+        r"\noindent \textbf{Bending stresses} at the plate surfaces ($z = \pm h/2$):",
+        r"\begin{equation}",
+        r"\sigma_x = \frac{6\,M_x}{h^2}, \qquad \sigma_y = \frac{6\,M_y}{h^2}",
+        r"\end{equation}",
+        "",
+        r"\noindent Substituting values step by step:",
+        r"\begin{align}",
+        rf"\sigma_x &= \frac{{6 \times {_fmt(Mx_disp, 4)}}}{{{_fmt(h_disp, 4)}^2}} "
+        rf"= \frac{{{_fmt(6.0 * Mx_disp, 4)}}}{{{_fmt(h_disp**2, 4)}}} "
+        rf"= {_fmt(sigma_x_disp, 6)} \ \text{{{stress_unit}}} \\",
+        rf"\sigma_y &= \frac{{6 \times {_fmt(My_disp, 4)}}}{{{_fmt(h_disp, 4)}^2}} "
+        rf"= \frac{{{_fmt(6.0 * My_disp, 4)}}}{{{_fmt(h_disp**2, 4)}}} "
+        rf"= {_fmt(sigma_y_disp, 6)} \ \text{{{stress_unit}}}",
+        r"\end{align}",
+        "",
+    ]
+
+    return lines
+
+
 def _loading_description(inputs: ReportInputs, q0_disp: float, press_unit: str,
                          len_unit: str, units: str) -> List[str]:
     """Return LaTeX lines describing the applied loading."""
@@ -638,11 +936,15 @@ def generate_point_report(inputs: ReportInputs,
         r"\subsection{Loading}",
     ]
     latex_lines += _loading_description(inputs, q0_disp, press_unit, len_unit, units)
+    latex_lines += [""]
+    latex_lines += _load_expansion_section(inputs, q0_disp, press_unit, len_unit, units, n_terms)
     latex_lines += [
-        "",
         r"\subsection{Analysis Point}",
         rf"$(x, y) = ({_fmt(x_disp, 4)},\, {_fmt(y_disp, 4)})$ {len_unit}",
         "",
+    ]
+    latex_lines += _assumptions_section()
+    latex_lines += [
         # --- Section 2: Governing Equation ---
         r"\section{Governing Equation}",
         r"The deflection $w(x,y)$ of a thin plate under transverse loading "
@@ -660,6 +962,11 @@ def generate_point_report(inputs: ReportInputs,
         _method_equations(inputs, D_disp, n_terms, ritz_terms,
                          a_disp, b_disp, q0_disp, len_unit, press_unit, rig_unit),
         "",
+    ]
+    if inputs.method.lower() == "levy":
+        latex_lines += _levy_worked_example(inputs, D, q0_disp, D_disp, a_disp, b_disp,
+                                            len_unit, press_unit, rig_unit, units, point, n_terms)
+    latex_lines += [
         # --- Section 4: Convergence Study ---
         r"\section{Convergence Study}",
     ]
@@ -706,21 +1013,10 @@ def generate_point_report(inputs: ReportInputs,
         r"\bottomrule",
         r"\end{tabular}",
         "",
-        r"\subsection{Bending Stresses}",
-        r"The maximum bending stresses occur at the plate surfaces "
-        r"($z = \pm h/2$) and are computed from:",
-        r"\begin{equation}",
-        r"\sigma_x = \frac{6 M_x}{h^2}, \qquad \sigma_y = \frac{6 M_y}{h^2}",
-        r"\end{equation}",
-        "",
-        r"\noindent Substituting values:",
-        r"\begin{align}",
-        rf"\sigma_x &= \frac{{6 \times {_fmt(Mx_disp, 4)}}}{{{_fmt(h_disp, 4)}^2}} "
-        rf"= {_fmt(sigma_x_disp, 6)} \ \text{{{stress_unit}}} \\",
-        rf"\sigma_y &= \frac{{6 \times {_fmt(My_disp, 4)}}}{{{_fmt(h_disp, 4)}^2}} "
-        rf"= {_fmt(sigma_y_disp, 6)} \ \text{{{stress_unit}}}",
-        r"\end{align}",
-        "",
+    ]
+    latex_lines += _moment_derivation_section(inputs, point, h_disp, len_unit,
+                                              mom_unit, stress_unit, units)
+    latex_lines += [
     ]
 
     # Peak Stress Summary (always)
