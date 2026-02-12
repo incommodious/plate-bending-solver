@@ -17,6 +17,7 @@ from plate_bending.solvers.levy_solver import StableLevySolver
 from plate_bending.solvers.fit_solver import FITSolver
 from plate_bending.solvers.ritz_solver import RitzSolver
 from plate_bending.validation.benchmarks import Benchmarks
+from plate_bending.appendix import generate_appendix_latex, generate_linear_algebra_appendix
 
 
 @dataclass
@@ -1061,8 +1062,35 @@ def generate_point_report(inputs: ReportInputs,
         r"Rectangular Thin Plates with Two Adjacent Edges Free,'' "
         r"\emph{Archives of Applied Mechanics}, 2020.",
         r"\end{enumerate}",
-        r"\end{document}",
     ]
+
+    # --- Appendix: Linear Algebra Worked Example (Ritz only) ---
+    if inputs.method.lower() == 'ritz':
+        inputs_dict = {
+            'a': inputs.a, 'b': inputs.b, 'h': inputs.h,
+            'E': inputs.E, 'nu': inputs.nu, 'bc': inputs.bc,
+            'q0': inputs.q0, 'x': inputs.x, 'y': inputs.y,
+            'load_type': inputs.load_type, 'units': units,
+            'x0': inputs.x0, 'y0': inputs.y0, 'R': inputs.R,
+            'x1': inputs.x1, 'y1': inputs.y1, 'x2': inputs.x2, 'y2': inputs.y2,
+            'ritz_terms': ritz_terms,
+        }
+        latex_lines.append(generate_linear_algebra_appendix(inputs_dict, units))
+
+    # --- Appendix: Step-by-Step Calculation ---
+    if convergence:
+        conv_data = [{'n': int(label.split('=')[-1].rstrip('$')), 'w': val}
+                     for label, val, _ in convergence]
+        appendix_inputs = {
+            'a': inputs.a, 'b': inputs.b, 'h': inputs.h,
+            'E': inputs.E, 'nu': inputs.nu, 'bc': inputs.bc,
+            'q0': inputs.q0, 'x': inputs.x, 'y': inputs.y,
+            'load_type': inputs.load_type, 'units': units,
+        }
+        latex_lines.append(generate_appendix_latex(
+            appendix_inputs, results, conv_data, method=inputs.method.lower()))
+
+    latex_lines.append(r"\end{document}")
 
     report = "\n".join(latex_lines)
     data = {

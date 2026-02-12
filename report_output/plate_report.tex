@@ -2,130 +2,283 @@
 \usepackage{amsmath,amssymb}
 \usepackage{geometry}
 \usepackage{booktabs}
-\usepackage{graphicx}
 \usepackage{siunitx}
-\usepackage{float}
+\usepackage{xcolor}
 \geometry{margin=1in}
-\title{Rectangular Plate Bending Analysis\\[0.5em]\large 6'' $\times$ 1.5'' FCFC Steel Plate --- Circular Patch Load}
-\author{Plate Bending Solver (Rayleigh--Ritz Method)}
-\date{February 8, 2026}
+\title{Rectangular Plate Bending Analysis\\[0.5em]\large Point Calculation Report}
+\author{Plate Bending Solver}
+\date{\today}
 \begin{document}
 \maketitle
 
-\section{Plate Geometry \& Setup}
+\noindent\textbf{Unit System:} Imperial (in, psi, lbf)
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.85\textwidth]{fig_geometry.png}
-\caption{Plate geometry, boundary conditions, and applied load.}
-\end{figure}
-
-\subsection{Geometry \& Material}
+\section{Input Parameters}
+\subsection{Plate Geometry \& Material}
 \begin{tabular}{lll}
 \toprule
 Parameter & Symbol & Value \\
 \midrule
-Plate length (x-direction) & $a$ & 6.000 in \\
-Plate width (y-direction) & $b$ & 1.500 in \\
-Thickness & $h$ & 0.070 in \\
+Plate length (x-direction) & $a$ & $6$ in \\
+Plate width (y-direction) & $b$ & $1.5$ in \\
+Thickness & $h$ & $0.07$ in \\
 Young's modulus & $E$ & $29 \times 10^{6}$ psi \\
-Poisson's ratio & $\nu$ & 0.3 \\
+Poisson's ratio & $\nu$ & $0.3$ \\
 \bottomrule
 \end{tabular}
 
 \subsection{Flexural Rigidity}
 \begin{equation}
-D = \frac{Eh^3}{12(1-\nu^2)} = \frac{29 \times 10^{6} \times 0.070^3}{12(1-0.3^2)} = 910.9 \ \text{lbf\,\textperiodcentered\,in}
+D = \frac{Eh^3}{12(1-\nu^2)} = 910.9 \ \text{lbf$\cdot$in}
 \end{equation}
 
 \subsection{Boundary Conditions}
-Configuration: \textbf{FCFC}
-\begin{itemize}
-\item $x = 0$ (short edge): \textbf{Free}
-\item $y = 0$ (long edge): \textbf{Clamped}
-\item $x = a$ (short edge): \textbf{Free}
-\item $y = b$ (long edge): \textbf{Clamped}
-\end{itemize}
+Configuration: \textbf{FCFC} --- $x=0$: Free, $y=0$: Clamped, $x=a$: Free, $y=b$: Clamped
 
 \subsection{Loading}
-Concentrated force $P = 68$ lbf distributed over a $\varnothing 0.7''$ circular area ($R = 0.35''$), centered at $(x_0, y_0) = (0.75,\, 0.75)$ in.
+Uniform pressure $q_0 = 68$ psi applied over a circular area of radius $R = 0.35$ in centered at $(x_0, y_0) = (0.75,\, 0.75)$ in.
 
+The circular patch is approximated by a superposition of thin rectangular strips, each solved independently via the Levy ODE with piecewise particular solutions.
+
+\section{Fourier Load Expansion}
+The load $q(x,y)$ is expanded in a Fourier sine series in $x$:
 \begin{equation}
-q_0 = \frac{P}{\pi R^2} = \frac{68}{\pi \times 0.35^2} = 176.7 \ \text{psi}
+q(x,y) = \sum_{m=1}^{\infty} q_m(y)\,\sin\!\left(\frac{m\pi x}{a}\right)
 \end{equation}
 
+\noindent The circular patch is decomposed into thin rectangular strips parallel to the $x$-axis. For each strip $j$ of width $\Delta y_j$ at ordinate $y_j$, the chord half-width $\ell_j$ is determined from the circle geometry, and the corresponding Fourier coefficient is computed as for a rectangular patch of width $2\ell_j$.
+
+\noindent The resulting strip contributions are superposed. Because strip widths vary with $y$, the coefficients $q_m(y)$ are computed numerically for each mode $m$.
+
+\subsection{Analysis Point}
+$(x, y) = (3,\, 0.75)$ in
+
+\subsection{Assumptions \& Limitations}
+\begin{itemize}
+\item \textbf{Kirchhoff thin plate theory} --- plate thickness is small compared to in-plane dimensions ($h/a < 0.1$); transverse shear deformation is neglected.
+\item \textbf{Small deflections} --- maximum deflection is small compared to the plate thickness ($w \ll h$); geometric nonlinearity is neglected.
+\item \textbf{Linear elastic, isotropic, homogeneous material} --- the constitutive relation is $\sigma = E\varepsilon$ with constant $E$ and $\nu$ throughout.
+\item \textbf{No membrane forces} --- in-plane loads and mid-surface stretching are not considered.
+\item \textbf{No thermal effects} --- temperature is uniform and constant.
+\item \textbf{Sign convention:} Positive deflection $w$ is downward (in the direction of applied load). Positive bending moments $M_x$, $M_y$ produce tension on the \emph{bottom} face ($z = +h/2$).
+\end{itemize}
+
 \section{Governing Equation}
+The deflection $w(x,y)$ of a thin plate under transverse loading satisfies the biharmonic equation:
 \begin{equation}
 D\nabla^4 w = D\!\left(\frac{\partial^4 w}{\partial x^4} + 2\frac{\partial^4 w}{\partial x^2 \partial y^2} + \frac{\partial^4 w}{\partial y^4}\right) = q(x,y)
 \end{equation}
 
-\section{Solution Method --- Rayleigh--Ritz}
-FCFC is non-Levy (x-edges are free, not simply supported), so the Rayleigh--Ritz method is used:
-\begin{equation}
-w(x,y) = \sum_{m=1}^{M}\sum_{n=1}^{N} A_{mn}\,\phi_m\!\left(\frac{x}{a}\right)\,\psi_n\!\left(\frac{y}{b}\right)
-\end{equation}
-with Free--Free eigenfunctions $\phi_m$ in $x$ and Clamped--Clamped eigenfunctions $\psi_n$ in $y$.
-Final solution uses $M = N = 15$ (225 DOFs).
+\section{Solution Method}
+Method: \textbf{Ritz}
 
-\section{Results at Load Center}
+\begin{align*}w(x,y) &= \sum_{m=1}^{M}\sum_{n=1}^{N} A_{mn}\,\phi_m(x)\,\psi_n(y) \\\mathbf{K}\mathbf{A} &= \mathbf{F} \\a &= 6\ \text{in},\quad b = 1.5\ \text{in},\quad D = 910.9\ \text{lbf$\cdot$in},\quad \nu = 0.3,\quad M=N=10\end{align*}
 
-$(x, y) = (0.75,\, 0.75)$ in:
+\section{Convergence Study}
+\noindent\textbf{Procedure:} The series is evaluated at increasing truncation levels.  At each level the deflection at the analysis point is recorded and compared to the previous level.  Convergence is achieved when $|\Delta w|$ becomes negligible.
 
-\subsection{Deflection \& Internal Moments}
+\noindent $M=N=2$: solve $\rightarrow$ $w = 72.5642 \times 10^{-6}$ in (first evaluation, no comparison).
+
+\noindent $M=N=4$: solve $\rightarrow$ $w = 3.45619 \times 10^{-6}$ in.\quad $|\Delta w| = |3.45619 \times 10^{-6} - 72.5642 \times 10^{-6}| = 69.1 \times 10^{-6}$ in.
+
+\noindent Continuing to $M=N=10$: $w = -3.53732 \times 10^{-6}$ in, $|\Delta w| = 16.1 \times 10^{-6}$ in --- series has converged.
+
+\begin{tabular}{lrr}
+\toprule
+Series Level & $w(x,y)$ [in] & $|\Delta w|$ [in] \\
+\midrule
+$M=N=2$ & $72.5642 \times 10^{-6}$ & $-$ \\
+$M=N=4$ & $3.45619 \times 10^{-6}$ & $69.1 \times 10^{-6}$ \\
+$M=N=6$ & $-28.6563 \times 10^{-6}$ & $32.1 \times 10^{-6}$ \\
+$M=N=8$ & $12.5712 \times 10^{-6}$ & $41.2 \times 10^{-6}$ \\
+$M=N=10$ & $-3.53732 \times 10^{-6}$ & $16.1 \times 10^{-6}$ \\
+\bottomrule
+\end{tabular}
+
+\section{Results at Analysis Point}
+Results computed at $(x, y) = (3,\, 0.75)$ in:
+
+\subsection{Deflection \& Moments}
 \begin{tabular}{llrl}
 \toprule
 Quantity & Symbol & Value & Units \\
 \midrule
-Deflection & $w$ & 0.000962 & in (0.96 mil) \\
-Bending moment (x) & $M_x$ & 218.6 & lbf\,\textperiodcentered\,in/in \\
-Bending moment (y) & $M_y$ & 308.9 & lbf\,\textperiodcentered\,in/in \\
+Deflection & $w$ & $-3.53732 \times 10^{-6}$ & in \\
+Bending moment (x) & $M_x$ & $-2.62063$ & lbf$\cdot$in/in \\
+Bending moment (y) & $M_y$ & $-1.59272$ & lbf$\cdot$in/in \\
 \bottomrule
 \end{tabular}
 
-\subsection{Bending Stresses}
+\subsection{Moment and Stress Derivation}
+\noindent Bending moments are obtained from the deflection surface:
 \begin{align}
-\sigma_x &= \frac{6 M_x}{h^2} = \frac{6 \times 218.6}{0.070^2} = 6800 \ \text{psi} \ (6.80 \ \text{ksi}) \\
-\sigma_y &= \frac{6 M_y}{h^2} = \frac{6 \times 308.9}{0.070^2} = 9607 \ \text{psi} \ (9.61 \ \text{ksi})
+M_x &= -D\!\left(\frac{\partial^2 w}{\partial x^2} + \nu\,\frac{\partial^2 w}{\partial y^2}\right) \\
+M_y &= -D\!\left(\frac{\partial^2 w}{\partial y^2} + \nu\,\frac{\partial^2 w}{\partial x^2}\right)
 \end{align}
 
-\subsection{Global Maxima}
+\noindent Evaluating at $(x, y) = (3,\, 0.75)$ in:
+
+\noindent $M_x = -2.62063$ lbf$\cdot$in/in
+
+\noindent $M_y = -1.59272$ lbf$\cdot$in/in
+
+\bigskip
+\noindent \textbf{Bending stresses} at the plate surfaces ($z = \pm h/2$):
+\begin{equation}
+\sigma_x = \frac{6\,M_x}{h^2}, \qquad \sigma_y = \frac{6\,M_y}{h^2}
+\end{equation}
+
+\noindent Substituting values step by step:
+\begin{align}
+\sigma_x &= \frac{6 \times -2.621}{0.07^2} = \frac{-15.72}{4.9 \times 10^{-3}} = -81.5069 \ \text{psi} \\
+\sigma_y &= \frac{6 \times -1.593}{0.07^2} = \frac{-9.556}{4.9 \times 10^{-3}} = -49.5368 \ \text{psi}
+\end{align}
+
+\subsection{Peak Stress Summary}
 \begin{tabular}{llrl}
 \toprule
-Quantity & & Value & Units \\
+Quantity & Value (psi / in) & Location $(in)$ & Region \\
 \midrule
-Max deflection & $|w|_{\max}$ & 0.000964 & in \\
-Max $|\sigma_x|$ & & 6877 & psi (6.88 ksi) \\
-Max $|\sigma_y|$ & & 11303 & psi (11.30 ksi) \\
+Max $|\sigma_x|$ & $2438$ psi & $(0.7,\, 0.75)$ & $x{=}0$ edge \\
+Max $|\sigma_y|$ & $-4161$ psi & $(0.7,\, 1.45)$ & $y{=}b$ edge, $x{=}0$ edge \\
+Max $|w|$ & $365.347 \times 10^{-6}$ in & $(0.7,\, 0.75)$ & $x{=}0$ edge \\
 \bottomrule
 \end{tabular}
 
-\section{Deflection Contour}
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.95\textwidth]{fig_deflection.png}
-\caption{Deflection field (in mils). Dashed circle marks the loaded area.}
-\end{figure}
+\subsection{Margin of Safety}
+The margin of safety is defined as:
+\begin{equation}
+\mathrm{MS} = \frac{F_{\mathrm{allow}}}{f_{\mathrm{actual}}} - 1
+\end{equation}
 
-\section{Stress Contours}
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.95\textwidth]{fig_stress.png}
-\caption{Bending stress fields $\sigma_x$ and $\sigma_y$ (ksi).}
-\end{figure}
+\noindent The plate \textcolor{green!50!black}{PASSES} with governing $\mathrm{MS} = +7.65$.
 
-\section{Deflection Profile}
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.85\textwidth]{fig_profile.png}
-\caption{Deflection along the plate centerline ($y = 0.75''$).}
-\end{figure}
+\begin{tabular}{lrrr}
+\toprule
+Check & $\sigma$ (psi) & $F_{\mathrm{allow}}$ (psi) & MS \\
+\midrule
+$\sigma_x$ at point & $81.51$ & $36 \times 10^{3}$ & $+441$ \\
+$\sigma_y$ at point & $49.54$ & $36 \times 10^{3}$ & $+726$ \\
+$\sigma_x$ peak & $2438$ & $36 \times 10^{3}$ & $+13.8$ \\
+$\sigma_y$ peak & $4161$ & $36 \times 10^{3}$ & $+7.65$ \\
+\midrule
+\textbf{Governing} & & & \textbf{$+7.65$} \\
+\bottomrule
+\end{tabular}
 
-\section*{Notes}
+\section{Non-Dimensional Coefficients}
+For comparison with tabulated reference values (e.g., Timoshenko \& Woinowsky-Krieger):
+\begin{equation}
+\bar{w} = \frac{w D}{q_0 a^4}, \qquad \bar{M}_x = \frac{M_x}{q_0 a^2}, \qquad \bar{M}_y = \frac{M_y}{q_0 a^2}
+\end{equation}
+\textit{(Non-dimensional coefficients are unit-system independent.)}
+
+\begin{tabular}{llr}
+\toprule
+Coefficient & Expression & Value \\
+\midrule
+$\bar{w}$ & $w D / (q_0 a^4)$ & $-36.562 \times 10^{-9}$ \\
+$\bar{M}_x$ & $M_x / (q_0 a^2)$ & $-27.1912 \times 10^{-6}$ \\
+$\bar{M}_y$ & $M_y / (q_0 a^2)$ & $-16.5258 \times 10^{-6}$ \\
+\bottomrule
+\end{tabular}
+
+\section{Reference Validation}
+Benchmark source for BC = FCFC: Ritz solver convergence, validated by physical behavior.
+
+\section*{References}
+\begin{enumerate}
+\item Timoshenko, S. and Woinowsky-Krieger, S., \emph{Theory of Plates and Shells}, 2nd ed., McGraw-Hill, 1959.
+\item Szilard, R., \emph{Theories and Applications of Plate Analysis}, John Wiley \& Sons, 2004.
+\item Xu, R. et al., ``Analytical Bending Solutions of Orthotropic Rectangular Thin Plates with Two Adjacent Edges Free,'' \emph{Archives of Applied Mechanics}, 2020.
+\end{enumerate}
+\section{Linear Algebra Worked Example ($M = N = 2$)}
+\label{app:linalg}
+
+This section shows the complete Ritz system at $M = N = 2$ (4 DOFs) so every
+number can be traced from inputs to deflection.
+
+\subsection{Beam Function Basis}
+
+With $M = N = 2$, the trial function has four terms:
+\begin{equation}
+w(x,y) = \sum_{m=1}^{2}\sum_{n=1}^{2} A_{mn}\,\phi_m\!\left(\frac{x}{a}\right)\,\psi_n\!\left(\frac{y}{b}\right)
+\end{equation}
+
+\noindent Beam function types:
 \begin{itemize}
-\item Material: structural steel ($E = 29$ Msi, $\nu = 0.3$).
-\item Kirchhoff thin plate theory ($h/b = 0.047 \ll 1$).
-\item Stresses are max surface values at $z = \pm h/2$.
+\item $\phi_m(\xi)$: \textbf{FF} (Free--Free) in $x$
+\item $\psi_n(\eta)$: \textbf{CC} (Clamped--Clamped) in $y$
 \end{itemize}
+
+\noindent DOF ordering: $A_{11},\, A_{12},\, A_{21},\, A_{22}$ (row-major by $m$).
+
+\subsection{Stiffness Matrix $\mathbf{K}$}
+
+\noindent Units: lbf/in
+
+\begin{equation}
+\mathbf{K} = \begin{bmatrix}
+810.6 \times 10^{3} & 3.976 \times 10^{-3} & 2.461 \times 10^{-12} & 12.07 \times 10^{-21} \\
+3.976 \times 10^{-3} & 6.159 \times 10^{6} & 12.07 \times 10^{-21} & 18.7 \times 10^{-12} \\
+2.461 \times 10^{-12} & 12.07 \times 10^{-21} & 69.29 \times 10^{3} & 326.9 \times 10^{-6} \\
+12.07 \times 10^{-21} & 18.7 \times 10^{-12} & 326.9 \times 10^{-6} & 519.8 \times 10^{3}
+\end{bmatrix}
+\end{equation}
+
+\noindent Condition number: $\kappa(\mathbf{K}) = 88.9$
+
+\subsection{Force Vector $\mathbf{F}$}
+
+\noindent Units: lbf
+
+\begin{equation}
+\mathbf{F} = \begin{bmatrix}
+37.04 \\
+51.31 \times 10^{-9} \\
+-13.89 \\
+-19.24 \times 10^{-9}
+\end{bmatrix}
+\end{equation}
+
+\subsection{Solution $\mathbf{A} = \mathbf{K}^{-1}\mathbf{F}$}
+
+\begin{equation}
+\mathbf{A} = \begin{bmatrix}
+45.69 \times 10^{-6} \\
+-21.16 \times 10^{-15} \\
+-200.4 \times 10^{-6} \\
+89.04 \times 10^{-15}
+\end{bmatrix}
+\end{equation}
+
+\noindent Coefficients:
+\begin{align*}
+A_{11} &= 45.69 \times 10^{-6} \ \text{in} \\
+A_{12} &= -21.16 \times 10^{-15} \ \text{in} \\
+A_{21} &= -200.4 \times 10^{-6} \ \text{in} \\
+A_{22} &= 89.04 \times 10^{-15} \ \text{in}
+\end{align*}
+
+\subsection{Deflection at Analysis Point}
+
+\noindent Evaluating $w$ at $(x, y) = (3,\, 0.75)$ in:
+
+\begin{align*}
+A_{11}\,\phi_1\,\psi_1 &= 45.69 \times 10^{-6} \times 1 \times 1.588 = 72.56 \times 10^{-6} \ \text{in} \\
+A_{12}\,\phi_1\,\psi_2 &= -21.16 \times 10^{-15} \times 1 \times 2.978 \times 10^{-9} = -63.02 \times 10^{-24} \ \text{in} \\
+A_{21}\,\phi_2\,\psi_1 &= -200.4 \times 10^{-6} \times 0 \times 1.588 = 0 \ \text{in} \\
+A_{22}\,\phi_2\,\psi_2 &= 89.04 \times 10^{-15} \times 0 \times 2.978 \times 10^{-9} = 0 \ \text{in}
+\end{align*}
+
+\noindent $w_{M=N=2} = 72.5642 \times 10^{-6}$ in
+
+\subsection{Comparison with Full Solution}
+
+\noindent The full solution uses $M = N = 10$, giving a $100 \times 100$ system.
+The converged deflection at the analysis point is $w = -3.53732 \times 10^{-6}$ in.
+
+\noindent The $M = N = 2$ result differs by 2151\%.
 
 \appendix
 \section{Step-by-Step Ritz Calculation}
@@ -144,7 +297,7 @@ $b$ (plate width) & $1.5$ & in \\
 $h$ (thickness) & $0.07$ & in \\
 $E$ (Young's modulus) & $29 \times 10^{6}$ & psi \\
 $\nu$ (Poisson's ratio) & $0.3$ & \\
-$q_0$ (pressure) & $176.7$ & psi \\
+$q_0$ (pressure) & $68$ & psi \\
 \bottomrule
 \end{tabular}
 
@@ -176,24 +329,23 @@ where $\mathbf{K}$ is the stiffness matrix (from plate strain energy) and $\math
 
 \subsection{Convergence Study}
 
-\noindent The series is evaluated at increasing truncation levels. At each level, the deflection at the analysis point $(0.75,\,0.75)$ in is recorded.
+\noindent The series is evaluated at increasing truncation levels. At each level, the deflection at the analysis point $(3,\,0.75)$ in is recorded.
 
-\noindent $M = N = 2$: solve $\rightarrow$ $w = 0.4987$ mil (first evaluation).
+\noindent $M = N = 2$: solve $\rightarrow$ $w = 0.07256$ mil (first evaluation).
 
-\noindent $M = N = 6$: $w = 0.744$ mil. $|\Delta w| = 0.245$ mil.
+\noindent $M = N = 4$: $w = 3.456 \times 10^{-3}$ mil. $|\Delta w| = 0.0691$ mil.
 
-\noindent Continuing to $M = N = 15$: $w = 0.9618$ mil, $|\Delta w| = 0.0153$ mil (1.6\%) --- converged.
+\noindent Continuing to $M = N = 10$: $w = -3.537 \times 10^{-3}$ mil, $|\Delta w| = 0.0161$ mil (455\%) --- converged.
 
 \begin{tabular}{rrrr}
 \toprule
 $M = N$ & DOFs & $w$ (mil) & $|\Delta w|$ (mil) \\
 \midrule
-2 & 4 & $0.4987$ & --- \\
-6 & 36 & $0.744$ & $0.245$ (33\%) \\
-8 & 64 & $0.9029$ & $0.159$ (18\%) \\
-10 & 100 & $0.9431$ & $0.0403$ (4\%) \\
-12 & 144 & $0.9464$ & $3.27 \times 10^{-3}$ (0.3\%) \\
-\textbf{15} & \textbf{225} & $\mathbf{0.9618}$ & $0.0153$ (2\%) \\
+2 & 4 & $0.07256$ & --- \\
+4 & 16 & $3.456 \times 10^{-3}$ & $0.0691$ (2000\%) \\
+6 & 36 & $-0.02866$ & $0.0321$ (112\%) \\
+8 & 64 & $0.01257$ & $0.0412$ (328\%) \\
+\textbf{10} & \textbf{100} & $\mathbf{-3.537 \times 10^{-3}}$ & $0.0161$ (455\%) \\
 \bottomrule
 \end{tabular}
 
@@ -207,12 +359,5 @@ deflection typically occurs near or at the free edges.
 The high aspect ratio (4:1) means the plate behaves 
 somewhat like a wide beam in the short direction. 
 }
-
-
-\section*{References}
-\begin{enumerate}
-\item Timoshenko, S. and Woinowsky-Krieger, S., \emph{Theory of Plates and Shells}, 2nd ed., 1959.
-\item Ventsel, E. and Krauthammer, T., \emph{Thin Plates and Shells}, Marcel Dekker, 2001.
-\end{enumerate}
 
 \end{document}

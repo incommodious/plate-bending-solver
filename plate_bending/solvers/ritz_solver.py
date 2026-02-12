@@ -54,6 +54,8 @@ class RitzSolver:
         self.ndof = M * N
         self.results = {}
         self.debug = []
+        self._K = None
+        self._F = None
 
         # Parse boundary conditions
         self.bc_x0 = self.bc[0]  # x = 0
@@ -274,6 +276,10 @@ class RitzSolver:
             F = self._assemble_load_circular(q0, x0, y0, R)
         else:
             raise ValueError(f"Unknown load type: {load_type}")
+
+        # Store K and F for diagnostics / appendix display
+        self._K = K.copy()
+        self._F = F.copy()
 
         # Solve K*A = F
         try:
