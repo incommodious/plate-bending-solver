@@ -41,6 +41,7 @@ class ReportInputs:
     y1: Optional[float] = None
     x2: Optional[float] = None
     y2: Optional[float] = None
+    F_allowable: Optional[float] = None  # allowable stress in Pa (SI)
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +395,150 @@ def _convergence_narrative(entries: List[Tuple[str, float, float]],
 
 
 # ---------------------------------------------------------------------------
+# Peak stress & margin of safety sections
+# ---------------------------------------------------------------------------
+
+def _peak_stress_table(results: Dict, h_disp: float, stress_unit: str,
+                       len_unit: str, units: str) -> List[str]:
+    """Return LaTeX lines for the Peak Stress Summary section."""
+    X, Y = results["X"], results["Y"]
+    sigma_x = results["sigma_x"]
+    sigma_y = results["sigma_y"]
+    W = results["W"]
+
+    def _find_peak(arr: np.ndarray) -> Tuple[float, float, float]:
+        abs_arr = np.abs(arr)
+        idx = np.unravel_index(np.argmax(abs_arr), abs_arr.shape)
+        val = float(arr[idx])
+        px = float(X[idx])
+        py = float(Y[idx])
+        return val, px, py
+
+    def _region(px: float, py: float, a: float, b: float) -> str:
+        labels = []
+        if py < 0.15 * b:
+            labels.append("$y{=}0$ edge")
+        elif py > 0.85 * b:
+            labels.append("$y{=}b$ edge")
+        if px < 0.15 * a:
+            labels.append("$x{=}0$ edge")
+        elif px > 0.85 * a:
+            labels.append("$x{=}a$ edge")
+        if not labels:
+            labels.append("interior")
+        return ", ".join(labels)
+
+    a_si = float(X[0, -1])
+    b_si = float(Y[-1, 0])
+
+    sx_val, sx_x, sx_y = _find_peak(sigma_x)
+    sy_val, sy_x, sy_y = _find_peak(sigma_y)
+    w_val, w_x, w_y = _find_peak(W)
+
+    _, stress_conv = UNIT_SYSTEMS[units]["stress"]
+    _, len_conv = UNIT_SYSTEMS[units]["length"]
+
+    lines = [
+        r"\subsection{Peak Stress Summary}",
+        r"\begin{tabular}{llrl}",
+        r"\toprule",
+        rf"Quantity & Value ({stress_unit} / {len_unit}) & Location $({len_unit})$ & Region \\",
+        r"\midrule",
+        rf"Max $|\sigma_x|$ & ${_fmt(sx_val * stress_conv, 4)}$ {stress_unit} "
+        rf"& $({_fmt(sx_x * len_conv, 4)},\, {_fmt(sx_y * len_conv, 4)})$ "
+        rf"& {_region(sx_x, sx_y, a_si, b_si)} \\",
+        rf"Max $|\sigma_y|$ & ${_fmt(sy_val * stress_conv, 4)}$ {stress_unit} "
+        rf"& $({_fmt(sy_x * len_conv, 4)},\, {_fmt(sy_y * len_conv, 4)})$ "
+        rf"& {_region(sy_x, sy_y, a_si, b_si)} \\",
+        rf"Max $|w|$ & ${_fmt(w_val * len_conv, 6)}$ {len_unit} "
+        rf"& $({_fmt(w_x * len_conv, 4)},\, {_fmt(w_y * len_conv, 4)})$ "
+        rf"& {_region(w_x, w_y, a_si, b_si)} \\",
+        r"\bottomrule",
+        r"\end{tabular}",
+        "",
+    ]
+    return lines
+
+
+def _margin_of_safety_section(inputs: ReportInputs, point: Dict[str, float],
+                               results: Dict, h_disp: float,
+                               stress_unit: str, units: str) -> List[str]:
+    """Return LaTeX lines for the Margin of Safety section."""
+    if inputs.F_allowable is None:
+        return []
+
+    F_allow = inputs.F_allowable
+    _, stress_conv = UNIT_SYSTEMS[units]["stress"]
+    F_allow_disp = F_allow * stress_conv
+
+    # Stresses at analysis point
+    sx_pt = abs(point["sigma_x"])
+    sy_pt = abs(point["sigma_y"])
+
+    # Peak stresses from full field
+    sx_peak = float(np.max(np.abs(results["sigma_x"])))
+    sy_peak = float(np.max(np.abs(results["sigma_y"])))
+
+    def _ms(allow: float, actual: float) -> float:
+        if actual == 0:
+            return float('inf')
+        if allow == 0:
+            return -1.0
+        return allow / actual - 1.0
+
+    ms_sx_pt = _ms(F_allow, sx_pt)
+    ms_sy_pt = _ms(F_allow, sy_pt)
+    ms_sx_pk = _ms(F_allow, sx_peak)
+    ms_sy_pk = _ms(F_allow, sy_peak)
+
+    all_ms = [ms_sx_pt, ms_sy_pt, ms_sx_pk, ms_sy_pk]
+    governing = min(all_ms)
+
+    if governing >= 0:
+        verdict = rf"\textcolor{{green!50!black}}{{PASSES}}"
+        sign = "+"
+    else:
+        verdict = rf"\textcolor{{red}}{{FAILS}}"
+        sign = ""
+
+    def _ms_fmt(ms: float) -> str:
+        if ms == float('inf'):
+            return r"$\infty$"
+        return f"${'+' if ms >= 0 else ''}{_fmt(ms, 3)}$"
+
+    def _s_fmt(val: float) -> str:
+        return f"${_fmt(val * stress_conv, 4)}$"
+
+    f_str = f"${_fmt(F_allow_disp, 4)}$"
+
+    lines = [
+        r"\subsection{Margin of Safety}",
+        r"The margin of safety is defined as:",
+        r"\begin{equation}",
+        r"\mathrm{MS} = \frac{F_{\mathrm{allow}}}{f_{\mathrm{actual}}} - 1",
+        r"\end{equation}",
+        "",
+        rf"\noindent The plate {verdict} with governing "
+        rf"$\mathrm{{MS}} = {sign}{_fmt(governing, 3)}$.",
+        "",
+        r"\begin{tabular}{lrrr}",
+        r"\toprule",
+        rf"Check & $\sigma$ ({stress_unit}) & $F_{{\mathrm{{allow}}}}$ ({stress_unit}) & MS \\",
+        r"\midrule",
+        rf"$\sigma_x$ at point & {_s_fmt(sx_pt)} & {f_str} & {_ms_fmt(ms_sx_pt)} \\",
+        rf"$\sigma_y$ at point & {_s_fmt(sy_pt)} & {f_str} & {_ms_fmt(ms_sy_pt)} \\",
+        rf"$\sigma_x$ peak & {_s_fmt(sx_peak)} & {f_str} & {_ms_fmt(ms_sx_pk)} \\",
+        rf"$\sigma_y$ peak & {_s_fmt(sy_peak)} & {f_str} & {_ms_fmt(ms_sy_pk)} \\",
+        r"\midrule",
+        rf"\textbf{{Governing}} & & & \textbf{{{_ms_fmt(governing)}}} \\",
+        r"\bottomrule",
+        r"\end{tabular}",
+        "",
+    ]
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # Main report generator
 # ---------------------------------------------------------------------------
 
@@ -411,6 +556,7 @@ def generate_point_report(inputs: ReportInputs,
         method=inputs.method, units=units,
         x0=inputs.x0, y0=inputs.y0, R=inputs.R,
         x1=inputs.x1, y1=inputs.y1, x2=inputs.x2, y2=inputs.y2,
+        F_allowable=inputs.F_allowable,
     )
 
     results = _solve_case(inputs, n_terms=n_terms, ritz_terms=ritz_terms)
@@ -456,6 +602,7 @@ def generate_point_report(inputs: ReportInputs,
         r"\usepackage{geometry}",
         r"\usepackage{booktabs}",
         r"\usepackage{siunitx}",
+        r"\usepackage{xcolor}",
         r"\geometry{margin=1in}",
         r"\title{Rectangular Plate Bending Analysis\\[0.5em]\large Point Calculation Report}",
         r"\author{Plate Bending Solver}",
@@ -574,6 +721,15 @@ def generate_point_report(inputs: ReportInputs,
         rf"= {_fmt(sigma_y_disp, 6)} \ \text{{{stress_unit}}}",
         r"\end{align}",
         "",
+    ]
+
+    # Peak Stress Summary (always)
+    latex_lines += _peak_stress_table(results, h_disp, stress_unit, len_unit, units)
+
+    # Margin of Safety (only if F_allowable set)
+    latex_lines += _margin_of_safety_section(inputs, point, results, h_disp, stress_unit, units)
+
+    latex_lines += [
         # --- Section 6: Non-Dimensional Coefficients ---
         r"\section{Non-Dimensional Coefficients}",
         r"For comparison with tabulated reference values "
@@ -661,6 +817,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Load center y (circular, point)")
     p.add_argument("--R", type=float, default=None,
                    help="Circular patch radius")
+    p.add_argument("--allowable", type=float, default=None,
+                   help="Allowable stress (psi for imperial, Pa for metric)")
     p.add_argument("--x1", type=float, default=None, help="Patch x-start")
     p.add_argument("--y1", type=float, default=None, help="Patch y-start")
     p.add_argument("--x2", type=float, default=None, help="Patch x-end")
@@ -695,10 +853,12 @@ def main() -> None:
         y1 = args.y1 * to_m if args.y1 is not None else None
         x2 = args.x2 * to_m if args.x2 is not None else None
         y2 = args.y2 * to_m if args.y2 is not None else None
+        F_allowable = args.allowable * to_pa if args.allowable is not None else None
     else:
         a, b, h, E, q0 = args.a, args.b, args.h, args.E, args.q0
         R = args.R
         x1, y1, x2, y2 = args.x1, args.y1, args.x2, args.y2
+        F_allowable = args.allowable
 
     inputs = ReportInputs(
         a=a, b=b, h=h, E=E, nu=args.nu,
@@ -706,6 +866,7 @@ def main() -> None:
         x=x, y=y, method=args.method, units=args.units,
         x0=x0, y0=y0, R=R,
         x1=x1, y1=y1, x2=x2, y2=y2,
+        F_allowable=F_allowable,
     )
 
     report, _ = generate_point_report(inputs)
